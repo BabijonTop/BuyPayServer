@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sqlite3
 from pathlib import Path
@@ -6,10 +7,25 @@ from datetime import datetime
 
 
 # ========================================
-# BUY PAY SERVER
+# BUY PAY — SERVER
 # ========================================
 
 app = FastAPI(title="BuyPay API")
+
+
+# ========================================
+# CORS
+# ========================================
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://babijontop.github.io"
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ========================================
@@ -27,9 +43,11 @@ def get_db():
 
 
 def init_database():
+
     connection = get_db()
     cursor = connection.cursor()
 
+    # USERS
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             telegram_id INTEGER PRIMARY KEY,
@@ -40,6 +58,7 @@ def init_database():
         )
     """)
 
+    # DEPOSITS
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS deposits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +69,7 @@ def init_database():
         )
     """)
 
+    # TRANSACTIONS
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,12 +93,14 @@ init_database()
 # ========================================
 
 class UserData(BaseModel):
+
     telegram_id: int
     username: str = ""
     first_name: str = ""
 
 
 class DepositData(BaseModel):
+
     telegram_id: int
     amount: int
 
@@ -89,6 +111,7 @@ class DepositData(BaseModel):
 
 @app.get("/")
 def home():
+
     return {
         "status": "ok",
         "service": "BuyPay",
@@ -104,6 +127,7 @@ def home():
 def create_user(data: UserData):
 
     if data.telegram_id <= 0:
+
         raise HTTPException(
             status_code=400,
             detail="Неверный Telegram ID"
@@ -113,7 +137,11 @@ def create_user(data: UserData):
     cursor = connection.cursor()
 
     cursor.execute(
-        "SELECT telegram_id FROM users WHERE telegram_id = ?",
+        """
+        SELECT telegram_id
+        FROM users
+        WHERE telegram_id = ?
+        """,
         (data.telegram_id,)
     )
 
@@ -123,20 +151,24 @@ def create_user(data: UserData):
 
     if existing_user:
 
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE users
             SET username = ?,
                 first_name = ?
             WHERE telegram_id = ?
-        """, (
-            data.username,
-            data.first_name,
-            data.telegram_id
-        ))
+            """,
+            (
+                data.username,
+                data.first_name,
+                data.telegram_id
+            )
+        )
 
     else:
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO users (
                 telegram_id,
                 username,
@@ -145,13 +177,15 @@ def create_user(data: UserData):
                 created_at
             )
             VALUES (?, ?, ?, ?, ?)
-        """, (
-            data.telegram_id,
-            data.username,
-            data.first_name,
-            0,
-            now
-        ))
+            """,
+            (
+                data.telegram_id,
+                data.username,
+                data.first_name,
+                0,
+                now
+            )
+        )
 
     connection.commit()
     connection.close()
@@ -172,17 +206,21 @@ def get_balance(telegram_id: int):
     connection = get_db()
     cursor = connection.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT balance
         FROM users
         WHERE telegram_id = ?
-    """, (telegram_id,))
+        """,
+        (telegram_id,)
+    )
 
     user = cursor.fetchone()
 
     connection.close()
 
     if not user:
+
         raise HTTPException(
             status_code=404,
             detail="Пользователь не найден"
@@ -202,6 +240,7 @@ def get_balance(telegram_id: int):
 def create_deposit(data: DepositData):
 
     if data.amount < 1000:
+
         raise HTTPException(
             status_code=400,
             detail="Минимальная сумма пополнения — 1000 сум"
@@ -210,15 +249,19 @@ def create_deposit(data: DepositData):
     connection = get_db()
     cursor = connection.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT telegram_id
         FROM users
         WHERE telegram_id = ?
-    """, (data.telegram_id,))
+        """,
+        (data.telegram_id,)
+    )
 
     user = cursor.fetchone()
 
     if not user:
+
         connection.close()
 
         raise HTTPException(
@@ -228,7 +271,8 @@ def create_deposit(data: DepositData):
 
     now = datetime.now().isoformat()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO deposits (
             telegram_id,
             amount,
@@ -236,12 +280,14 @@ def create_deposit(data: DepositData):
             created_at
         )
         VALUES (?, ?, ?, ?)
-    """, (
-        data.telegram_id,
-        data.amount,
-        "pending",
-        now
-    ))
+        """,
+        (
+            data.telegram_id,
+            data.amount,
+            "pending",
+            now
+        )
+    )
 
     deposit_id = cursor.lastrowid
 
@@ -257,7 +303,7 @@ def create_deposit(data: DepositData):
 
 
 # ========================================
-# GET DEPOSITS
+# GET USER DEPOSITS
 # ========================================
 
 @app.get("/deposits/{telegram_id}")
@@ -266,7 +312,8 @@ def get_deposits(telegram_id: int):
     connection = get_db()
     cursor = connection.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT
             id,
             amount,
@@ -275,7 +322,9 @@ def get_deposits(telegram_id: int):
         FROM deposits
         WHERE telegram_id = ?
         ORDER BY id DESC
-    """, (telegram_id,))
+        """,
+        (telegram_id,)
+    )
 
     deposits = cursor.fetchall()
 
@@ -283,6 +332,7 @@ def get_deposits(telegram_id: int):
 
     return {
         "telegram_id": telegram_id,
+
         "deposits": [
             {
                 "id": deposit["id"],
@@ -290,13 +340,14 @@ def get_deposits(telegram_id: int):
                 "status": deposit["status"],
                 "created_at": deposit["created_at"]
             }
+
             for deposit in deposits
         ]
     }
 
 
 # ========================================
-# ADMIN: CONFIRM DEPOSIT
+# ADMIN — CONFIRM DEPOSIT
 # ========================================
 
 @app.post("/admin/deposit/{deposit_id}/confirm")
@@ -305,15 +356,19 @@ def confirm_deposit(deposit_id: int):
     connection = get_db()
     cursor = connection.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT *
         FROM deposits
         WHERE id = ?
-    """, (deposit_id,))
+        """,
+        (deposit_id,)
+    )
 
     deposit = cursor.fetchone()
 
     if not deposit:
+
         connection.close()
 
         raise HTTPException(
@@ -322,6 +377,7 @@ def confirm_deposit(deposit_id: int):
         )
 
     if deposit["status"] != "pending":
+
         connection.close()
 
         raise HTTPException(
@@ -331,24 +387,35 @@ def confirm_deposit(deposit_id: int):
 
     telegram_id = deposit["telegram_id"]
     amount = deposit["amount"]
+
     now = datetime.now().isoformat()
 
-    cursor.execute("""
+    # Меняем статус заявки
+    cursor.execute(
+        """
         UPDATE deposits
         SET status = 'confirmed'
         WHERE id = ?
-    """, (deposit_id,))
+        """,
+        (deposit_id,)
+    )
 
-    cursor.execute("""
+    # Добавляем деньги на баланс
+    cursor.execute(
+        """
         UPDATE users
         SET balance = balance + ?
         WHERE telegram_id = ?
-    """, (
-        amount,
-        telegram_id
-    ))
+        """,
+        (
+            amount,
+            telegram_id
+        )
+    )
 
-    cursor.execute("""
+    # Создаём транзакцию
+    cursor.execute(
+        """
         INSERT INTO transactions (
             telegram_id,
             type,
@@ -357,13 +424,15 @@ def confirm_deposit(deposit_id: int):
             created_at
         )
         VALUES (?, ?, ?, ?, ?)
-    """, (
-        telegram_id,
-        "deposit",
-        amount,
-        f"Пополнение #{deposit_id}",
-        now
-    ))
+        """,
+        (
+            telegram_id,
+            "deposit",
+            amount,
+            f"Пополнение #{deposit_id}",
+            now
+        )
+    )
 
     connection.commit()
     connection.close()
@@ -377,7 +446,7 @@ def confirm_deposit(deposit_id: int):
 
 
 # ========================================
-# ADMIN: REJECT DEPOSIT
+# ADMIN — REJECT DEPOSIT
 # ========================================
 
 @app.post("/admin/deposit/{deposit_id}/reject")
@@ -386,15 +455,19 @@ def reject_deposit(deposit_id: int):
     connection = get_db()
     cursor = connection.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT *
         FROM deposits
         WHERE id = ?
-    """, (deposit_id,))
+        """,
+        (deposit_id,)
+    )
 
     deposit = cursor.fetchone()
 
     if not deposit:
+
         connection.close()
 
         raise HTTPException(
@@ -403,6 +476,7 @@ def reject_deposit(deposit_id: int):
         )
 
     if deposit["status"] != "pending":
+
         connection.close()
 
         raise HTTPException(
@@ -410,11 +484,14 @@ def reject_deposit(deposit_id: int):
             detail="Заявка уже обработана"
         )
 
-    cursor.execute("""
+    cursor.execute(
+        """
         UPDATE deposits
         SET status = 'rejected'
         WHERE id = ?
-    """, (deposit_id,))
+        """,
+        (deposit_id,)
+    )
 
     connection.commit()
     connection.close()
@@ -435,7 +512,8 @@ def get_transactions(telegram_id: int):
     connection = get_db()
     cursor = connection.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT
             id,
             type,
@@ -445,7 +523,9 @@ def get_transactions(telegram_id: int):
         FROM transactions
         WHERE telegram_id = ?
         ORDER BY id DESC
-    """, (telegram_id,))
+        """,
+        (telegram_id,)
+    )
 
     transactions = cursor.fetchall()
 
@@ -453,6 +533,7 @@ def get_transactions(telegram_id: int):
 
     return {
         "telegram_id": telegram_id,
+
         "transactions": [
             {
                 "id": transaction["id"],
@@ -461,6 +542,7 @@ def get_transactions(telegram_id: int):
                 "description": transaction["description"],
                 "created_at": transaction["created_at"]
             }
+
             for transaction in transactions
         ]
     }
