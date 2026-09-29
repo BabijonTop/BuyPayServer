@@ -7,7 +7,7 @@ from datetime import datetime
 
 
 # ========================================
-# BUY PAY — SERVER
+# BUY PAY API
 # ========================================
 
 app = FastAPI(title="BuyPay API")
@@ -93,14 +93,12 @@ init_database()
 # ========================================
 
 class UserData(BaseModel):
-
     telegram_id: int
     username: str = ""
     first_name: str = ""
 
 
 class DepositData(BaseModel):
-
     telegram_id: int
     amount: int
 
@@ -303,7 +301,7 @@ def create_deposit(data: DepositData):
 
 
 # ========================================
-# GET USER DEPOSITS
+# GET DEPOSIT HISTORY
 # ========================================
 
 @app.get("/deposits/{telegram_id}")
@@ -332,7 +330,6 @@ def get_deposits(telegram_id: int):
 
     return {
         "telegram_id": telegram_id,
-
         "deposits": [
             {
                 "id": deposit["id"],
@@ -340,7 +337,6 @@ def get_deposits(telegram_id: int):
                 "status": deposit["status"],
                 "created_at": deposit["created_at"]
             }
-
             for deposit in deposits
         ]
     }
@@ -400,7 +396,7 @@ def confirm_deposit(deposit_id: int):
         (deposit_id,)
     )
 
-    # Добавляем деньги на баланс
+    # Пополняем баланс
     cursor.execute(
         """
         UPDATE users
@@ -533,7 +529,6 @@ def get_transactions(telegram_id: int):
 
     return {
         "telegram_id": telegram_id,
-
         "transactions": [
             {
                 "id": transaction["id"],
@@ -542,7 +537,13 @@ def get_transactions(telegram_id: int):
                 "description": transaction["description"],
                 "created_at": transaction["created_at"]
             }
-
             for transaction in transactions
         ]
     }
+
+
+# ========================================
+# SERVER STARTED
+# ========================================
+
+print("🔥 BuyPay API запущен!")
